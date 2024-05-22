@@ -1,5 +1,5 @@
 import unittest
-from snake.pathfind import create_matrix, remove_obstacles, add_obstacles, bfs
+from snake.pathfinder import create_matrix, remove_obstacles, add_obstacles, bfs
 
 
 class TestBFS(unittest.TestCase):
@@ -50,6 +50,7 @@ class TestBFS(unittest.TestCase):
         start = (0, 0)
         goal = (4, 4)
         expected_path = [(1, 0), (2, 0), (3, 0), (4, 0), (4, 1), (4, 2), (4, 3), (4, 4)]
+        expected_path.reverse()
         self.assertEqual(bfs(m, n, matrix, start, goal), expected_path)
 
     def test_bfs_with_obstacles(self):
@@ -64,6 +65,7 @@ class TestBFS(unittest.TestCase):
             (1, 0), (2, 0), (3, 0), (4, 0),
             (4, 1), (4, 2), (4, 3), (4, 4)
         ]
+        expected_path.reverse()
         result_path = bfs(m, n, matrix, start, goal)
         self.assertEqual(result_path, expected_path)
 

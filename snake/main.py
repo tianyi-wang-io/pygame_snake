@@ -5,11 +5,27 @@ import time
 from collections import deque
 from enum import Enum
 from typing import List, Tuple, Deque
-from pathfind import create_matrix, add_obstacles, remove_obstacles, bfs
+from pathfinder import create_matrix, add_obstacles, remove_obstacles, bfs, bfs_with_heuristic
 
 
 FPS = 10
 BLOCK_SIZE = 10
+WIDTH = 640
+HEIGHT = 480
+
+
+def shrink_coordinates(positions: List[Tuple[int, int]], width_first=True) -> List[Tuple[int, int]]:
+    if width_first:
+        return [(y // BLOCK_SIZE, x // BLOCK_SIZE) for (x, y) in positions]
+    else:
+        return [(x // BLOCK_SIZE, y // BLOCK_SIZE) for (x, y) in positions]
+
+
+def enlarge_coordinates(positions: List[Tuple[int, int]], width_first=True) -> List[Tuple[int, int]]:
+    if width_first:
+        return [(y * BLOCK_SIZE, x * BLOCK_SIZE) for (x, y) in positions]
+    else:
+        return [(x * BLOCK_SIZE, y * BLOCK_SIZE) for (x, y) in positions]
 
 
 class Colors:
@@ -45,29 +61,34 @@ class Food:
         self.generate_random_food()
 
     def generate_random_food(self):
-        x = random.randrange(0, self.width // BLOCK_SIZE) * 10
-        y = random.randrange(0, self.height // BLOCK_SIZE) * 10
+        x = random.randrange(0, self.width // BLOCK_SIZE) * BLOCK_SIZE
+        y = random.randrange(0, self.height // BLOCK_SIZE) * BLOCK_SIZE
         self.position = [(x, y)]
 
 
 class PathFinder:
-    def __init__(self, width, height):
+    def __init__(self, width: int, height: int):
         self.x = width // BLOCK_SIZE
         self.y = height // BLOCK_SIZE
         self.matrix = create_matrix(self.y, self.x)
         self.path = []
 
-    def add_obstacle(self, obstacle) -> None:
-        add_obstacles(self.matrix, obstacle)
+    def add_obstacle(self, obstacles: List[Tuple[int, int]]) -> None:
+        add_obstacles(self.matrix, obstacles)
 
-    def remove_obstacle(self, obstacle) -> None:
-        remove_obstacles(self.matrix, obstacle)
+    def remove_obstacle(self, obstacles: List[Tuple[int, int]]) -> None:
+        remove_obstacles(self.matrix, obstacles)
 
-    def find_path(self, start, goal) -> None:
-        start = start[1] // 10, start[0] // 10  # row, col
-        goal = goal[1] // 10, goal[0] // 10
-        path = bfs(self.y, self.x, self.matrix, start, goal)
-        self.path = [(y * BLOCK_SIZE, x * BLOCK_SIZE) for (x, y) in path]  # (col, row)
+    def find_path(self, start, goal, obstacles) -> None:
+        start = start[1] // BLOCK_SIZE, start[0] // BLOCK_SIZE  # row, col
+        goal = goal[1] // BLOCK_SIZE, goal[0] // BLOCK_SIZE
+        shrank_obstacles = shrink_coordinates(obstacles, width_first=True)
+        self.add_obstacle(shrank_obstacles)
+        # path finding algorithm
+        # path = bfs(self.y, self.x, self.matrix, start, goal)
+        path = bfs_with_heuristic(self.y, self.x, self.matrix, start, goal)
+        self.remove_obstacle(shrank_obstacles)
+        self.path = enlarge_coordinates(path, width_first=True)
 
 
 class Snake:
@@ -93,17 +114,20 @@ class Snake:
             direction = self.prev_direction
 
         if direction == Direction.UP:
-            self.head = (self.head[0], self.head[1] - BLOCK_SIZE)
+            new_head = (self.head[0], self.head[1] - BLOCK_SIZE)
         elif direction == Direction.DOWN:
-            self.head = (self.head[0], self.head[1] + BLOCK_SIZE)
+            new_head = (self.head[0], self.head[1] + BLOCK_SIZE)
         elif direction == Direction.LEFT:
-            self.head = (self.head[0] - BLOCK_SIZE, self.head[1])
+            new_head = (self.head[0] - BLOCK_SIZE, self.head[1])
         else:
-            self.head = (self.head[0] + BLOCK_SIZE, self.head[1])
+            new_head = (self.head[0] + BLOCK_SIZE, self.head[1])
+
+        self.body_set.add(self.head)
+        self.head = new_head
         self.body.appendleft(self.head)
-        self.body_set.add(self.body[1])
+        self.tail = self.body.pop()
+        self.body_set.remove(self.tail)
         self.prev_direction = direction
-        self.body_set.remove(self.body.pop())
 
     def eat(self, food_position: Tuple[int, int]) -> bool:
         if self.head == food_position:
@@ -124,7 +148,6 @@ class App:
         self.food = Food(width, height)
         self.pathfinder = PathFinder(width, height)
         self.direction = Direction.UP
-        self.fps = pygame.time.Clock()
 
     def on_init(self):
         passes, fails = pygame.init()
@@ -141,7 +164,7 @@ class App:
         self._running = False
         time.sleep(3)
         pygame.quit()
-        sys.exit()
+        sys.exit(0)
 
     def is_game_over(self):
         x, y = self.snake.head[0], self.snake.head[1]
@@ -179,31 +202,27 @@ class App:
         except Exception as e:
             print(e)
 
+        clock = pygame.time.Clock()
+        self.pathfinder.find_path(self.snake.head, self.food.position[0], self.snake.body_set)
         while self._running:
             self._game_window.fill(Colors.BLACK)
             for event in pygame.event.get():
                 self.on_event(event)
-            if not self._start:
-                self.pathfinder.find_path(self.snake.head, self.food.position[0])
-                self.draw(self.pathfinder.path, Colors.BLUE, border_radius=1)
-                self.draw(self.snake.body, Colors.WHITE, border_radius=3)
-                self.draw(self.food.position, Colors.RED)
-                pygame.display.update()
-                continue
-            self.snake.grow(self.direction)
-            if self.snake.eat(self.food.position[0]):
-                self.food.generate_random_food()
-                self.pathfinder.find_path(self.snake.head, self.food.position[0])
+            if self._start:
+                self.snake.grow(self.direction)
+                if self.snake.eat(self.food.position[0]):
+                    self.food.generate_random_food()
+                    self.pathfinder.find_path(self.snake.head, self.food.position[0], self.snake.body_set)
             self.draw(self.pathfinder.path, Colors.BLUE, border_radius=1)
             self.draw(self.snake.body, Colors.WHITE, border_radius=3)
             self.draw(self.food.position, Colors.RED)
             pygame.display.update()
             self.is_game_over()
-            self.fps.tick(FPS)
+            clock.tick(FPS)
 
 
 def main():
-    app = App(640, 480)
+    app = App(WIDTH, HEIGHT)
     app.on_execute()
 
 
