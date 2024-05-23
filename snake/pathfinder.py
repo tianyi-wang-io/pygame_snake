@@ -3,19 +3,8 @@ from collections import deque
 from typing import Tuple, List
 
 
-def create_matrix(m: int, n: int) -> List[List[int]]:
-    matrix = [[0 for _ in range(n)] for _ in range(m)]
-    return matrix
-
-
-def remove_obstacles(matrix: List[List[int]], obstacles: List[Tuple[int, int]]) -> None:
-    for i, j in obstacles:
-        matrix[i][j] = 0
-
-
-def add_obstacles(matrix: List[List[int]], obstacles: List[Tuple[int, int]]) -> None:
-    for i, j in obstacles:
-        matrix[i][j] = 1
+def mahatma_distance(x: Tuple[int, int], y: Tuple[int, int]) -> int:
+    return abs(x[0] - y[0]) + abs(x[1] - y[1])
 
 
 def next_move(x, y):
@@ -24,8 +13,14 @@ def next_move(x, y):
         yield next_x, next_y
 
 
-def mahatma_distance(x: Tuple[int, int], y: Tuple[int, int]) -> int:
-    return abs(x[0] - y[0]) + abs(x[1] - y[1])
+def construct_path(came_from: dict, start: Tuple[int, int], goal: Tuple[int, int], reverse=False) -> List[Tuple[int, int]]:
+    path = []
+    while goal != start:
+        path.append(goal)
+        goal = came_from[goal]
+    if reverse:
+        path.reverse()
+    return path
 
 
 def bfs(m: int, n: int, matrix: List[List[int]],
@@ -35,11 +30,7 @@ def bfs(m: int, n: int, matrix: List[List[int]],
     while queue:
         i, j = queue.popleft()
         if (i, j) == goal:
-            path = []
-            while (i, j) != start:
-                path.append((i, j))
-                i, j = came_from[(i, j)]
-            return path
+            return construct_path(came_from, start, goal)
         for next_i, next_j in next_move(i, j):
             if (not 0 <= next_i < m
                 or not 0 <= next_j < n
@@ -59,11 +50,7 @@ def bfs_with_heuristic(m: int, n: int, matrix: List[List[int]],
     while queue:
         distance, (i, j) = heapq.heappop(queue)
         if (i, j) == goal:
-            path = []
-            while (i, j) != start:
-                path.append((i, j))
-                i, j = came_from[(i, j)]
-            return path
+            return construct_path(came_from, start, goal)
         for next_i, next_j in next_move(i, j):
             if (not 0 <= next_i < m
                 or not 0 <= next_j < n
@@ -74,3 +61,26 @@ def bfs_with_heuristic(m: int, n: int, matrix: List[List[int]],
             heapq.heappush(queue, (mahatma_distance((next_i, next_j), goal), (next_i, next_j)))
             came_from[(next_i, next_j)] = (i, j)
     return []
+
+
+# TODO: implement dijkstra algorithm
+def dijkstra(m: int, n: int, matrix: List[List[int]],
+             start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
+    pass
+
+
+# TODO: implement A* algorithm
+def astart(m: int, n: int, matrix: List[List[int]],
+           start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
+    pass
+
+
+def path_finder_algorithm(algorithm, m, n, matrix, start, goal):
+    functions = {
+        "bfs": bfs,
+        "bfs_with_heuristic": bfs_with_heuristic,
+    }
+    if algorithm in functions:
+        return functions[algorithm](m, n, matrix, start, goal)
+    else:
+        raise ValueError(f"Algorithm: {algorithm} not found.")

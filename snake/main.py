@@ -5,7 +5,8 @@ import time
 from collections import deque
 from enum import Enum
 from typing import List, Tuple, Deque
-from pathfinder import create_matrix, add_obstacles, remove_obstacles, bfs, bfs_with_heuristic
+from matrix import create_matrix, add_obstacles, remove_obstacles
+from pathfinder import path_finder_algorithm
 
 
 FPS = 10
@@ -84,9 +85,7 @@ class PathFinder:
         goal = goal[1] // BLOCK_SIZE, goal[0] // BLOCK_SIZE
         shrank_obstacles = shrink_coordinates(obstacles, width_first=True)
         self.add_obstacle(shrank_obstacles)
-        # path finding algorithm
-        # path = bfs(self.y, self.x, self.matrix, start, goal)
-        path = bfs_with_heuristic(self.y, self.x, self.matrix, start, goal)
+        path = path_finder_algorithm('bfs_with_heuristic', self.y, self.x, self.matrix, start, goal)
         self.remove_obstacle(shrank_obstacles)
         self.path = enlarge_coordinates(path, width_first=True)
 
