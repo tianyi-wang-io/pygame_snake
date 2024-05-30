@@ -2,7 +2,7 @@ import sys
 import pygame
 import random
 import time
-from collections import deque
+from collections import deque, OrderedDict
 from enum import Enum
 from typing import List, Tuple, Deque
 from matrix import create_matrix, add_obstacles, remove_obstacles
@@ -13,6 +13,8 @@ FPS = 10
 BLOCK_SIZE = 10
 WIDTH = 640
 HEIGHT = 480
+INITIAL_SNAKE_SIZE = 3
+PATHFIND_ALGORITHM = 'astar'
 
 
 def shrink_coordinates(positions: List[Tuple[int, int]], width_first=True) -> List[Tuple[int, int]]:
@@ -62,8 +64,8 @@ class Food:
         self.generate_random_food()
 
     def generate_random_food(self):
-        x = random.randrange(0, self.width // BLOCK_SIZE) * BLOCK_SIZE
-        y = random.randrange(0, self.height // BLOCK_SIZE) * BLOCK_SIZE
+        x = random.randrange(self.width // BLOCK_SIZE) * BLOCK_SIZE
+        y = random.randrange(self.height // BLOCK_SIZE) * BLOCK_SIZE
         self.position = [(x, y)]
 
 
@@ -85,7 +87,7 @@ class PathFinder:
         goal = goal[1] // BLOCK_SIZE, goal[0] // BLOCK_SIZE
         shrank_obstacles = shrink_coordinates(obstacles, width_first=True)
         self.add_obstacle(shrank_obstacles)
-        path = path_finder_algorithm('bfs_with_heuristic', self.y, self.x, self.matrix, start, goal)
+        path = path_finder_algorithm(PATHFIND_ALGORITHM, self.y, self.x, self.matrix, start, goal)
         self.remove_obstacle(shrank_obstacles)
         self.path = enlarge_coordinates(path, width_first=True)
 
@@ -102,10 +104,10 @@ class Snake:
 
     def init_snake(self, size):
         for i in range(size):
-            pixel = (self.head[0], self.head[1] + i * BLOCK_SIZE)
-            self.body.append(pixel)
-            self.body_set.add(pixel)
-            self.tail = pixel
+            position = (self.head[0], self.head[1] + i * BLOCK_SIZE)
+            self.body.append(position)
+            self.body_set.add(position)
+            self.tail = position
         self.body_set.remove(self.head)
 
     def grow(self, direction: Direction) -> None:
@@ -143,12 +145,12 @@ class App:
         self._start = False
         self._game_window = None
         self.display_size = (width, height)
-        self.snake = Snake(width, height, 3)
+        self.snake = Snake(width, height, INITIAL_SNAKE_SIZE)
         self.food = Food(width, height)
         self.pathfinder = PathFinder(width, height)
         self.direction = Direction.UP
 
-    def on_init(self):
+    def game_initializer(self):
         passes, fails = pygame.init()
         if fails > 0:
             print(f'{fails} fails.')
@@ -171,7 +173,12 @@ class App:
             print('game over')
             self.game_over()
 
-    def on_event(self, event):
+    def draw(self, coordinates: Deque | List[Tuple[int, int]], color, **kwargs):
+        for x, y in coordinates:
+            pixels = pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE)
+            pygame.draw.rect(self._game_window, color, pixels, **kwargs)
+
+    def game_event_handler(self, event):
         if event.type == pygame.QUIT:
             self._running = False
         elif event.type == pygame.KEYDOWN:
@@ -190,14 +197,21 @@ class App:
             elif event.key == pygame.K_ESCAPE:
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
 
-    def draw(self, coordinates: Deque | List[Tuple[int, int]], color, **kwargs):
-        for x, y in coordinates:
-            pixels = pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE)
-            pygame.draw.rect(self._game_window, color, pixels, **kwargs)
+    def game_state_update(self):
+        if self._start:
+            self.snake.grow(self.direction)
+            if self.snake.eat(self.food.position[0]):
+                self.food.generate_random_food()
+                self.pathfinder.find_path(self.snake.head, self.food.position[0], self.snake.body_set)
+        self.draw(self.pathfinder.path, Colors.BLUE, border_radius=1)
+        self.draw(self.snake.body, Colors.WHITE, border_radius=3)
+        self.draw(self.food.position, Colors.RED)
+        pygame.display.update()
+        self.is_game_over()
 
-    def on_execute(self):
+    def game_execute(self):
         try:
-            self.on_init()
+            self.game_initializer()
         except Exception as e:
             print(e)
 
@@ -206,23 +220,14 @@ class App:
         while self._running:
             self._game_window.fill(Colors.BLACK)
             for event in pygame.event.get():
-                self.on_event(event)
-            if self._start:
-                self.snake.grow(self.direction)
-                if self.snake.eat(self.food.position[0]):
-                    self.food.generate_random_food()
-                    self.pathfinder.find_path(self.snake.head, self.food.position[0], self.snake.body_set)
-            self.draw(self.pathfinder.path, Colors.BLUE, border_radius=1)
-            self.draw(self.snake.body, Colors.WHITE, border_radius=3)
-            self.draw(self.food.position, Colors.RED)
-            pygame.display.update()
-            self.is_game_over()
+                self.game_event_handler(event)
+            self.game_state_update()
             clock.tick(FPS)
 
 
 def main():
     app = App(WIDTH, HEIGHT)
-    app.on_execute()
+    app.game_execute()
 
 
 if __name__ == '__main__':
