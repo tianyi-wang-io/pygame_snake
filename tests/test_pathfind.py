@@ -1,5 +1,5 @@
 import unittest
-from snake.pathfinder import create_matrix, remove_obstacles, add_obstacles, bfs
+from pathfinder import create_matrix, remove_obstacles, add_obstacles, bfs
 
 
 class TestBFS(unittest.TestCase):
