@@ -9,16 +9,16 @@ from matrix import create_matrix, add_obstacles, remove_obstacles, generate_fixe
 from pathfinder import path_finder_algorithm
 
 
-FPS = 10
+FPS = 20
 BLOCK_SIZE = 10
 SIDE_PANEL_SIZE = 200
-WIDTH = 640
-HEIGHT = 480
+WIDTH = 200
+HEIGHT = 200
 INITIAL_SNAKE_SIZE = 3
 # PATHFIND_ALGORITHM = 'bfs'
 # PATHFIND_ALGORITHM = 'bfs_with_heuristic'
-# PATHFIND_ALGORITHM = 'astar'
-PATHFIND_ALGORITHM = 'dijkstra'
+PATHFIND_ALGORITHM = 'astar'
+# PATHFIND_ALGORITHM = 'dijkstra'
 
 
 def shrink_coordinates(positions: Iterable[Tuple[int, int]], width_first=True) -> List[Tuple[int, int]]:
@@ -83,7 +83,7 @@ class PathFinder:
         self.path = []
         self.step_count = 0
 
-    def add_obstacle(self, obstacles: List[Tuple[int, int]]) -> None:
+    def add_obstacle(self, obstacles: Iterable[Tuple[int, int]]) -> None:
         add_obstacles(self.matrix, obstacles)
 
     def remove_obstacle(self, obstacles: List[Tuple[int, int]]) -> None:
@@ -151,10 +151,12 @@ class App:
         self._running = True
         self._start = False
         self._game_window = None
+        self._font = None
+        self._auto = False
         self.display_size = (WIDTH + SIDE_PANEL_SIZE, HEIGHT)
         self.game_display_size = (width, height)
         self.obstacles = set()
-        self.add_obstacle(start=(2, 2), size=3)
+        # self.add_obstacle(start=(2, 2), size=3)
         self.snake = Snake(width, height, INITIAL_SNAKE_SIZE)
         self.food = Food(width, height)
         self.pathfinder = PathFinder(width, height, self.obstacles)
@@ -163,7 +165,9 @@ class App:
 
     def update_food_position(self):
         self.food.generate_random_food()
-        while self.food.position[0] in self.obstacles:
+        while (self.food.position[0] in self.obstacles
+               or self.food.position[0] in self.snake.body
+               or self.food.position[0] == self.snake.head):
             self.food.generate_random_food()
 
     def side_panel(self):
@@ -172,25 +176,27 @@ class App:
         side_panel.fill(Colors.WHITE)
 
         # render text
-        font = pygame.font.SysFont(None, 22)
         text_to_render = [
             f'Game Status: {"Pause" if not self._start else "Start"}',
+            f'Autopilot: {self._auto}',
             f'Score: {self.score}',
             f'Path Algorithm: {PATHFIND_ALGORITHM.capitalize()}',
-            f'Algorithm grid explored: ',
-            f'{self.pathfinder.step_count} / {WIDTH // BLOCK_SIZE * HEIGHT // BLOCK_SIZE}',
+            f'Grid Explored: {self.pathfinder.step_count} / {WIDTH // BLOCK_SIZE * HEIGHT // BLOCK_SIZE}',
         ]
 
-        y_offset = 20
+        y_offset = BLOCK_SIZE
         for text in text_to_render:
-            text_surface = font.render(text, True, Colors.BLACK)
+            text_surface = self._font.render(text, True, Colors.BLACK)
             side_panel.blit(text_surface, (10, y_offset))
-            y_offset += 60
+            y_offset += HEIGHT // len(text_to_render)
 
         self._game_window.blit(side_panel, (WIDTH, 0))
 
     def game_over(self):
         self._running = False
+        text_surface = self._font.render('Game Over', True, Colors.RED)
+        self._game_window.blit(text_surface, (self.game_display_size[0] // 2, self.game_display_size[1] // 2))
+        pygame.display.update()
         time.sleep(3)
         pygame.quit()
         sys.exit(0)
@@ -201,7 +207,8 @@ class App:
                 or y < 0
                 or x >= self.game_display_size[0]
                 or y >= self.game_display_size[1]
-                or (x, y) in self.get_obstacles_draw_position()):
+                or (x, y) in self.get_obstacles_draw_position()
+                or (x, y) in self.snake.body_set):
             print('game over')
             self.game_over()
 
@@ -218,6 +225,31 @@ class App:
             pixels = pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE)
             pygame.draw.rect(self._game_window, color, pixels, **kwargs)
 
+    def autopilot(self):
+        directions = {
+            (0, BLOCK_SIZE): Direction.DOWN,
+            (0, -BLOCK_SIZE): Direction.UP,
+            (BLOCK_SIZE, 0): Direction.RIGHT,
+            (-BLOCK_SIZE, 0): Direction.LEFT
+        }
+        if self.pathfinder.path:
+            next_x, next_y = self.pathfinder.path.pop()
+            x, y = next_x - self.snake.head[0], next_y - self.snake.head[1]
+            return directions[(x, y)]
+        else:
+            return self.snake.prev_direction
+
+    def game_initializer(self):
+        passes, fails = pygame.init()
+        if fails > 0:
+            print(f'{fails} fails.')
+        else:
+            print('Game initiated.')
+        pygame.display.set_caption('Snake')
+        self._game_window = pygame.display.set_mode(self.display_size, pygame.RESIZABLE)
+        self._game_window.fill(Colors.BLACK)
+        self._running = True
+
     def game_event_handler(self, event):
         if event.type == pygame.QUIT:
             self._running = False
@@ -233,23 +265,17 @@ class App:
             # Space
             elif event.key == pygame.K_SPACE:
                 self._start = self._start is False
+            # Autopilot
+            elif event.key == pygame.K_a:
+                self._auto = self._auto is False
             # Esc
             elif event.key == pygame.K_ESCAPE:
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
 
-    def game_initializer(self):
-        passes, fails = pygame.init()
-        if fails > 0:
-            print(f'{fails} fails.')
-        else:
-            print('Game initiated.')
-        pygame.display.set_caption('Snake')
-        self._game_window = pygame.display.set_mode(self.display_size, pygame.SCALED)
-        self._game_window.fill(Colors.BLACK)
-        self._running = True
-
     def game_state_update(self):
         if self._start:
+            if self._auto:
+                self.direction = self.autopilot()  # if autopilot play
             self.snake.grow(self.direction)
             if self.snake.eat(self.food.position[0]):
                 self.score += 1
@@ -266,6 +292,7 @@ class App:
     def game_execute(self):
         try:
             self.game_initializer()
+            self._font = pygame.font.SysFont('arial', 12)
         except Exception as e:
             print(e)
 
