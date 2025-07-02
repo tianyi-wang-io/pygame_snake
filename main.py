@@ -152,11 +152,11 @@ class App:
         self._start = False
         self._game_window = None
         self._font = None
-        self._auto = False
+        self._auto = True
         self.display_size = (WIDTH + SIDE_PANEL_SIZE, HEIGHT)
         self.game_display_size = (width, height)
         self.obstacles = set()
-        # self.add_obstacle(start=(2, 2), size=3)
+        # self.add_obstacle(start=(2, 2), size=8)
         self.snake = Snake(width, height, INITIAL_SNAKE_SIZE)
         self.food = Food(width, height)
         self.pathfinder = PathFinder(width, height, self.obstacles)

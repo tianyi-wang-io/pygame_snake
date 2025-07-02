@@ -20,9 +20,9 @@ def generate_fixed_obstacle(m: int, n: int, size: int, start: Tuple[int, int]) -
     x, y = start
     rows = m // size
     cols = n // size
-    one = [(rows, i) for i in range(cols, cols * 2)]
-    two = [(i, cols * 2) for i in range(rows, rows * 2)]
-    three = [(rows * 2, i) for i in range(cols * 2, cols-1, -1)]
+    one = [(rows, i) for i in range(cols, cols * 3)]
+    two = [(i, cols * 3) for i in range(rows, rows * 3)]
+    three = [(rows * 3, i) for i in range(cols * 3, cols-1, -1)]
     obstacles = one + two + three
     obstacles = [(i + x, j + y) for i, j in obstacles]
     return obstacles
